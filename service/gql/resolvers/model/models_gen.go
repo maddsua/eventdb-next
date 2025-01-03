@@ -26,11 +26,6 @@ type DataStream struct {
 	Events  []StreamEvent `json:"events"`
 }
 
-type DataStreamsPage struct {
-	Entries []DataStream `json:"entries"`
-	HasNext bool         `json:"has_next"`
-}
-
 type EventField struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`

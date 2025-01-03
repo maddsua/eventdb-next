@@ -15,8 +15,7 @@ where id = sqlc.arg(id);
 
 -- name: GetStreams :many
 select * from streams
-order by created_at asc
-limit sqlc.arg(limit) offset sqlc.arg(offset);
+order by created_at asc;
 
 -- name: SetStreamPushKey :execrows
 update streams

@@ -247,16 +247,10 @@ func (q *Queries) GetStreamByID(ctx context.Context, id string) (Stream, error) 
 const getStreams = `-- name: GetStreams :many
 select id, push_key, name, created_at, updated_at from streams
 order by created_at asc
-limit ?2 offset ?1
 `
 
-type GetStreamsParams struct {
-	Offset int64
-	Limit  int64
-}
-
-func (q *Queries) GetStreams(ctx context.Context, arg GetStreamsParams) ([]Stream, error) {
-	rows, err := q.db.QueryContext(ctx, getStreams, arg.Offset, arg.Limit)
+func (q *Queries) GetStreams(ctx context.Context) ([]Stream, error) {
+	rows, err := q.db.QueryContext(ctx, getStreams)
 	if err != nil {
 		return nil, err
 	}

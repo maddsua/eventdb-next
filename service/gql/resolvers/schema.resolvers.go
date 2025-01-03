@@ -236,41 +236,22 @@ func (r *queryResolver) AuthSigninState(ctx context.Context) (*model.SigninState
 }
 
 // Streams is the resolver for the streams field.
-func (r *queryResolver) Streams(ctx context.Context, page *int) (*model.DataStreamsPage, error) {
+func (r *queryResolver) Streams(ctx context.Context) ([]model.DataStream, error) {
 	//	todo: add auth stuff here
 
-	const pageSize = 25
-
-	var offset int64
-	if page != nil {
-		offset = int64(*page) * pageSize
-	}
-
-	entries, err := r.DB.GetStreams(ctx, sqliteops.GetStreamsParams{
-		Limit:  pageSize + 1,
-		Offset: offset,
-	})
+	entries, err := r.DB.GetStreams(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var resultEntries []model.DataStream
-	if len(entries) < pageSize {
-		resultEntries = make([]model.DataStream, len(entries))
-	} else {
-		resultEntries = make([]model.DataStream, pageSize)
-	}
-
-	for idx := range resultEntries {
-		if resultEntries[idx], err = model.TransformDataStream(entries[idx]); err != nil {
+	result := make([]model.DataStream, len(entries))
+	for idx := range result {
+		if result[idx], err = model.TransformDataStream(entries[idx]); err != nil {
 			return nil, err
 		}
 	}
 
-	return &model.DataStreamsPage{
-		Entries: resultEntries,
-		HasNext: len(entries) > pageSize,
-	}, nil
+	return result, nil
 }
 
 // Stream is the resolver for the stream field.

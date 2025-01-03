@@ -25,9 +25,9 @@ type DataStream struct {
 	Events  []StreamEvent `json:"events"`
 }
 
-type DataStreamInfo struct {
-	ID   uuid.UUID `json:"id"`
-	Name string    `json:"name"`
+type DataStreamsPage struct {
+	Entries []DataStream `json:"entries"`
+	HasNext bool         `json:"has_next"`
 }
 
 type EventField struct {
@@ -48,14 +48,14 @@ type SigninState struct {
 }
 
 type StreamEvent struct {
-	ID            uuid.UUID      `json:"id"`
-	Stream        DataStreamInfo `json:"stream"`
-	ClientIP      string         `json:"client_ip"`
-	TransactionID string         `json:"transaction_id"`
-	Date          time.Time      `json:"date"`
-	Message       string         `json:"message"`
-	Level         LogLevel       `json:"level"`
-	Fields        []EventField   `json:"fields"`
+	ID            uuid.UUID    `json:"id"`
+	Stream        DataStream   `json:"stream"`
+	ClientIP      *string      `json:"client_ip,omitempty"`
+	TransactionID *string      `json:"transaction_id,omitempty"`
+	Date          time.Time    `json:"date"`
+	Message       string       `json:"message"`
+	Level         LogLevel     `json:"level"`
+	Fields        []EventField `json:"fields"`
 }
 
 type Subscription struct {

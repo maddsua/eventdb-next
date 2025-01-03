@@ -10,8 +10,36 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/guregu/null"
+	sqliteops "github.com/maddsua/eventdb-next/database/operations/sqlite"
 	"github.com/maddsua/eventdb-next/gql/resolvers/model"
+	"github.com/maddsua/eventdb-next/gql/resolvers/scalars"
+	"github.com/maddsua/eventdb-next/utils"
 )
+
+// Events is the resolver for the events field.
+func (r *dataStreamResolver) Events(ctx context.Context, obj *model.DataStream, from *time.Time, to *time.Time, streamID *uuid.UUID, logLevel *model.LogLevel) ([]model.StreamEvent, error) {
+	//	todo: add auth stuff here
+
+	entries, err := r.DB.GetEvents(ctx, sqliteops.GetEventsParams{
+		StreamID: scalars.NullUuidString(streamID),
+		Before:   scalars.NullEpoch(to),
+		After:    scalars.NullEpoch(from),
+		Level:    null.StringFromPtr((*string)(logLevel)).NullString,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]model.StreamEvent, len(entries))
+	for idx, item := range entries {
+		if result[idx], err = model.TransformStreamEvent(item); err != nil {
+			return nil, err
+		}
+	}
+
+	return result, nil
+}
 
 // AuthSigninPassword is the resolver for the authSigninPassword field.
 func (r *mutationResolver) AuthSigninPassword(ctx context.Context, username string, password string) (*model.SigninState, error) {
@@ -30,32 +58,149 @@ func (r *mutationResolver) AuthSignout(ctx context.Context) (*model.UserAuthStat
 
 // CreateStream is the resolver for the createStream field.
 func (r *mutationResolver) CreateStream(ctx context.Context, name string) (*model.DataStream, error) {
-	panic(fmt.Errorf("not implemented: CreateStream - createStream"))
+	//	todo: add auth stuff here
+
+	result := &model.DataStream{
+		ID:      uuid.New(),
+		PushKey: scalars.MkPtr(utils.NewToken(8)),
+		Name:    name,
+		Created: time.Now(),
+		Updated: time.Now(),
+	}
+
+	args := sqliteops.CreateStreamParams{
+		ID:      result.ID.String(),
+		PushKey: scalars.NullString(result.PushKey),
+		Name:    result.Name,
+	}
+
+	if _, err := r.DB.CreateStream(ctx, args); err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 // DeleteStream is the resolver for the deleteStream field.
 func (r *mutationResolver) DeleteStream(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
-	panic(fmt.Errorf("not implemented: DeleteStream - deleteStream"))
+	//	todo: add auth stuff here
+
+	if _, err := r.DB.RemoveStream(ctx, id.String()); err != nil {
+		return uuid.UUID{}, err
+	}
+
+	return id, nil
 }
 
 // DeleteEvents is the resolver for the deleteEvents field.
 func (r *mutationResolver) DeleteEvents(ctx context.Context, streamID *uuid.UUID, after *time.Time, before *time.Time) ([]uuid.UUID, error) {
+	//	todo: add auth stuff here
+
 	panic(fmt.Errorf("not implemented: DeleteEvents - deleteEvents"))
 }
 
 // RefreshStreamPushKey is the resolver for the refreshStreamPushKey field.
 func (r *mutationResolver) RefreshStreamPushKey(ctx context.Context, streamID uuid.UUID) (*model.DataStream, error) {
-	panic(fmt.Errorf("not implemented: RefreshStreamPushKey - refreshStreamPushKey"))
+	//	todo: add auth stuff here
+
+	tx, err := r.DB.BeginTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	defer tx.Rollback()
+
+	if _, err := tx.SetStreamPushKey(ctx, sqliteops.SetStreamPushKeyParams{
+		ID:      streamID.String(),
+		PushKey: null.StringFrom(utils.NewToken(8)).NullString,
+	}); err != nil {
+		return nil, err
+	}
+
+	entry, err := tx.GetStreamByID(ctx, streamID.String())
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := model.TransformDataStream(entry)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
 }
 
 // ClearStreamPushKey is the resolver for the clearStreamPushKey field.
 func (r *mutationResolver) ClearStreamPushKey(ctx context.Context, streamID uuid.UUID) (*model.DataStream, error) {
-	panic(fmt.Errorf("not implemented: ClearStreamPushKey - clearStreamPushKey"))
+	//	todo: add auth stuff here
+
+	tx, err := r.DB.BeginTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	defer tx.Rollback()
+
+	if _, err := tx.SetStreamPushKey(ctx, sqliteops.SetStreamPushKeyParams{
+		ID: streamID.String(),
+	}); err != nil {
+		return nil, err
+	}
+
+	entry, err := tx.GetStreamByID(ctx, streamID.String())
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := model.TransformDataStream(entry)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
 }
 
 // UpdateStreamName is the resolver for the updateStreamName field.
 func (r *mutationResolver) UpdateStreamName(ctx context.Context, streamID uuid.UUID, name string) (*model.DataStream, error) {
-	panic(fmt.Errorf("not implemented: UpdateStreamName - updateStreamName"))
+	//	todo: add auth stuff here
+
+	tx, err := r.DB.BeginTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	defer tx.Rollback()
+
+	if _, err := tx.SetStreamName(ctx, sqliteops.SetStreamNameParams{
+		ID:   streamID.String(),
+		Name: name,
+	}); err != nil {
+		return nil, err
+	}
+
+	entry, err := tx.GetStreamByID(ctx, streamID.String())
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := model.TransformDataStream(entry)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
 }
 
 // AuthSessionState is the resolver for the authSessionState field.
@@ -69,34 +214,100 @@ func (r *queryResolver) AuthSigninState(ctx context.Context) (*model.SigninState
 }
 
 // Streams is the resolver for the streams field.
-func (r *queryResolver) Streams(ctx context.Context) ([]model.DataStream, error) {
-	panic(fmt.Errorf("not implemented: Streams - streams"))
+func (r *queryResolver) Streams(ctx context.Context, page *int) (*model.DataStreamsPage, error) {
+	//	todo: add auth stuff here
+
+	const pageSize = 25
+
+	var offset int64
+	if page != nil {
+		offset = int64(*page) * pageSize
+	}
+
+	entries, err := r.DB.GetStreams(ctx, sqliteops.GetStreamsParams{
+		Limit:  pageSize + 1,
+		Offset: offset,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var resultEntries []model.DataStream
+	if len(entries) < pageSize {
+		resultEntries = make([]model.DataStream, len(entries))
+	} else {
+		resultEntries = make([]model.DataStream, pageSize)
+	}
+
+	for idx := range resultEntries {
+		if resultEntries[idx], err = model.TransformDataStream(entries[idx]); err != nil {
+			return nil, err
+		}
+	}
+
+	return &model.DataStreamsPage{
+		Entries: resultEntries,
+		HasNext: len(entries) > pageSize,
+	}, nil
 }
 
 // Stream is the resolver for the stream field.
-func (r *queryResolver) Stream(ctx context.Context, id *uuid.UUID) (*model.DataStream, error) {
-	panic(fmt.Errorf("not implemented: Stream - stream"))
+func (r *queryResolver) Stream(ctx context.Context, id uuid.UUID) (*model.DataStream, error) {
+	//	todo: add auth stuff here
+
+	entry, err := r.DB.GetStreamByID(ctx, id.String())
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := model.TransformDataStream(entry)
+	if err != nil {
+		return nil, err
+	}
+
+	return &result, nil
 }
 
 // Feed is the resolver for the feed field.
 func (r *queryResolver) Feed(ctx context.Context, from *time.Time, to *time.Time, streamID *uuid.UUID, logLevel *model.LogLevel, clientIP *string, transactionID *string) ([]model.StreamEvent, error) {
+	//	todo: add auth stuff here
+
 	panic(fmt.Errorf("not implemented: Feed - feed"))
 }
 
 // Activity is the resolver for the activity field.
 func (r *queryResolver) Activity(ctx context.Context, from *time.Time, to *time.Time) ([]model.ActivityPoint, error) {
+	//	todo: add auth stuff here
+
 	panic(fmt.Errorf("not implemented: Activity - activity"))
 }
 
 // Stream is the resolver for the stream field.
-func (r *streamEventResolver) Stream(ctx context.Context, obj *model.StreamEvent) (*model.DataStreamInfo, error) {
-	panic(fmt.Errorf("not implemented: Stream - stream"))
+func (r *streamEventResolver) Stream(ctx context.Context, obj *model.StreamEvent) (*model.DataStream, error) {
+	//	todo: add auth stuff here
+
+	entry, err := r.DB.GetStreamByID(ctx, obj.Stream.ID.String())
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := model.TransformDataStream(entry)
+	if err != nil {
+		return nil, err
+	}
+
+	return &result, nil
 }
 
 // Feed is the resolver for the feed field.
 func (r *subscriptionResolver) Feed(ctx context.Context, streamID *uuid.UUID, logLevel *model.LogLevel, clientIP *string, transactionID *string) (<-chan []model.StreamEvent, error) {
+	//	todo: add auth stuff here
+
 	panic(fmt.Errorf("not implemented: Feed - feed"))
 }
+
+// DataStream returns DataStreamResolver implementation.
+func (r *Resolver) DataStream() DataStreamResolver { return &dataStreamResolver{r} }
 
 // Mutation returns MutationResolver implementation.
 func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
@@ -110,6 +321,7 @@ func (r *Resolver) StreamEvent() StreamEventResolver { return &streamEventResolv
 // Subscription returns SubscriptionResolver implementation.
 func (r *Resolver) Subscription() SubscriptionResolver { return &subscriptionResolver{r} }
 
+type dataStreamResolver struct{ *Resolver }
 type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type streamEventResolver struct{ *Resolver }

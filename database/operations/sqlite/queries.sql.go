@@ -111,6 +111,59 @@ func (q *Queries) DeleteEvents(ctx context.Context, arg DeleteEventsParams) (int
 	return result.RowsAffected()
 }
 
+const getEvents = `-- name: GetEvents :many
+select id, created_at, stream_id, client_ip, transaction_id, type, level, message, fields from events
+where (stream_id = ?1 or ?1 is null)
+	and (level = ?2 or ?2 is null)
+	and (created_at < ?3 or ?3 is null)
+	and (created_at > ?4 or ?4 is null)
+`
+
+type GetEventsParams struct {
+	StreamID sql.NullString
+	Level    sql.NullString
+	Before   sql.NullInt64
+	After    sql.NullInt64
+}
+
+func (q *Queries) GetEvents(ctx context.Context, arg GetEventsParams) ([]Event, error) {
+	rows, err := q.db.QueryContext(ctx, getEvents,
+		arg.StreamID,
+		arg.Level,
+		arg.Before,
+		arg.After,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Event
+	for rows.Next() {
+		var i Event
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.StreamID,
+			&i.ClientIp,
+			&i.TransactionID,
+			&i.Type,
+			&i.Level,
+			&i.Message,
+			&i.Fields,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getStreamByID = `-- name: GetStreamByID :one
 select id, push_key, name, created_at, updated_at from streams
 where id = ?1

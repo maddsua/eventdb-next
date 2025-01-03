@@ -41,6 +41,7 @@ type Config struct {
 }
 
 type ResolverRoot interface {
+	DataStream() DataStreamResolver
 	Mutation() MutationResolver
 	Query() QueryResolver
 	StreamEvent() StreamEventResolver
@@ -58,16 +59,16 @@ type ComplexityRoot struct {
 
 	DataStream struct {
 		Created func(childComplexity int) int
-		Events  func(childComplexity int) int
+		Events  func(childComplexity int, from *time.Time, to *time.Time, streamID *uuid.UUID, logLevel *model.LogLevel) int
 		ID      func(childComplexity int) int
 		Name    func(childComplexity int) int
 		PushKey func(childComplexity int) int
 		Updated func(childComplexity int) int
 	}
 
-	DataStreamInfo struct {
-		ID   func(childComplexity int) int
-		Name func(childComplexity int) int
+	DataStreamsPage struct {
+		Entries func(childComplexity int) int
+		HasNext func(childComplexity int) int
 	}
 
 	EventField struct {
@@ -92,8 +93,8 @@ type ComplexityRoot struct {
 		AuthSessionState func(childComplexity int) int
 		AuthSigninState  func(childComplexity int) int
 		Feed             func(childComplexity int, from *time.Time, to *time.Time, streamID *uuid.UUID, logLevel *model.LogLevel, clientIP *string, transactionID *string) int
-		Stream           func(childComplexity int, id *uuid.UUID) int
-		Streams          func(childComplexity int) int
+		Stream           func(childComplexity int, id uuid.UUID) int
+		Streams          func(childComplexity int, page *int) int
 	}
 
 	SigninState struct {
@@ -124,6 +125,9 @@ type ComplexityRoot struct {
 	}
 }
 
+type DataStreamResolver interface {
+	Events(ctx context.Context, obj *model.DataStream, from *time.Time, to *time.Time, streamID *uuid.UUID, logLevel *model.LogLevel) ([]model.StreamEvent, error)
+}
 type MutationResolver interface {
 	AuthSigninPassword(ctx context.Context, username string, password string) (*model.SigninState, error)
 	AuthSigninVerify2fa(ctx context.Context, code int) (*model.SigninState, error)
@@ -138,13 +142,13 @@ type MutationResolver interface {
 type QueryResolver interface {
 	AuthSessionState(ctx context.Context) (*model.UserAuthState, error)
 	AuthSigninState(ctx context.Context) (*model.SigninState, error)
-	Streams(ctx context.Context) ([]model.DataStream, error)
-	Stream(ctx context.Context, id *uuid.UUID) (*model.DataStream, error)
+	Streams(ctx context.Context, page *int) (*model.DataStreamsPage, error)
+	Stream(ctx context.Context, id uuid.UUID) (*model.DataStream, error)
 	Feed(ctx context.Context, from *time.Time, to *time.Time, streamID *uuid.UUID, logLevel *model.LogLevel, clientIP *string, transactionID *string) ([]model.StreamEvent, error)
 	Activity(ctx context.Context, from *time.Time, to *time.Time) ([]model.ActivityPoint, error)
 }
 type StreamEventResolver interface {
-	Stream(ctx context.Context, obj *model.StreamEvent) (*model.DataStreamInfo, error)
+	Stream(ctx context.Context, obj *model.StreamEvent) (*model.DataStream, error)
 }
 type SubscriptionResolver interface {
 	Feed(ctx context.Context, streamID *uuid.UUID, logLevel *model.LogLevel, clientIP *string, transactionID *string) (<-chan []model.StreamEvent, error)
@@ -195,7 +199,12 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			break
 		}
 
-		return e.complexity.DataStream.Events(childComplexity), true
+		args, err := ec.field_DataStream_events_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.DataStream.Events(childComplexity, args["from"].(*time.Time), args["to"].(*time.Time), args["stream_id"].(*uuid.UUID), args["log_level"].(*model.LogLevel)), true
 
 	case "DataStream.id":
 		if e.complexity.DataStream.ID == nil {
@@ -225,19 +234,19 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.DataStream.Updated(childComplexity), true
 
-	case "DataStreamInfo.id":
-		if e.complexity.DataStreamInfo.ID == nil {
+	case "DataStreamsPage.entries":
+		if e.complexity.DataStreamsPage.Entries == nil {
 			break
 		}
 
-		return e.complexity.DataStreamInfo.ID(childComplexity), true
+		return e.complexity.DataStreamsPage.Entries(childComplexity), true
 
-	case "DataStreamInfo.name":
-		if e.complexity.DataStreamInfo.Name == nil {
+	case "DataStreamsPage.has_next":
+		if e.complexity.DataStreamsPage.HasNext == nil {
 			break
 		}
 
-		return e.complexity.DataStreamInfo.Name(childComplexity), true
+		return e.complexity.DataStreamsPage.HasNext(childComplexity), true
 
 	case "EventField.key":
 		if e.complexity.EventField.Key == nil {
@@ -404,14 +413,19 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.Stream(childComplexity, args["id"].(*uuid.UUID)), true
+		return e.complexity.Query.Stream(childComplexity, args["id"].(uuid.UUID)), true
 
 	case "Query.streams":
 		if e.complexity.Query.Streams == nil {
 			break
 		}
 
-		return e.complexity.Query.Streams(childComplexity), true
+		args, err := ec.field_Query_streams_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.Streams(childComplexity, args["page"].(*int)), true
 
 	case "SigninState.expires":
 		if e.complexity.SigninState.Expires == nil {
@@ -657,8 +671,8 @@ schema {
 type Query {
     authSessionState: UserAuthState
     authSigninState: SigninState
-    streams: [DataStream!]!
-    stream(id: UUID): DataStream!
+    streams(page: Int): DataStreamsPage!
+    stream(id: UUID!): DataStream!
     feed(from: Date, to: Date, stream_id: UUID, log_level: LogLevel, client_ip: String, transaction_id: String): [StreamEvent!]!
     activity(from: Date, to: Date): [ActivityPoint!]!
 }
@@ -680,29 +694,29 @@ type UserAuthState {
     username: String!
 }
 
+type DataStreamsPage {
+    entries: [DataStream!]!
+    has_next: Boolean!
+}
+
 type DataStream {
     id: UUID!
     push_key: String
     name: String!
     created: Date!
     updated: Date!
-    events: [StreamEvent!]!
+    events(from: Date, to: Date, stream_id: UUID, log_level: LogLevel): [StreamEvent!]!
 }
 
 type StreamEvent {
     id: UUID!
-    stream: DataStreamInfo!
-    client_ip: String!
-    transaction_id: String!
+    stream: DataStream!
+    client_ip: String
+    transaction_id: String
     date: Date!
     message: String!
     level: LogLevel!
     fields: [EventField!]!
-}
-
-type DataStreamInfo {
-    id: UUID!
-    name: String!
 }
 
 enum LogLevel {
@@ -744,6 +758,83 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 // endregion ************************** generated!.gotpl **************************
 
 // region    ***************************** args.gotpl *****************************
+
+func (ec *executionContext) field_DataStream_events_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_DataStream_events_argsFrom(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["from"] = arg0
+	arg1, err := ec.field_DataStream_events_argsTo(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["to"] = arg1
+	arg2, err := ec.field_DataStream_events_argsStreamID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["stream_id"] = arg2
+	arg3, err := ec.field_DataStream_events_argsLogLevel(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["log_level"] = arg3
+	return args, nil
+}
+func (ec *executionContext) field_DataStream_events_argsFrom(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*time.Time, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("from"))
+	if tmp, ok := rawArgs["from"]; ok {
+		return ec.unmarshalODate2ᚖtimeᚐTime(ctx, tmp)
+	}
+
+	var zeroVal *time.Time
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_DataStream_events_argsTo(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*time.Time, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("to"))
+	if tmp, ok := rawArgs["to"]; ok {
+		return ec.unmarshalODate2ᚖtimeᚐTime(ctx, tmp)
+	}
+
+	var zeroVal *time.Time
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_DataStream_events_argsStreamID(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*uuid.UUID, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("stream_id"))
+	if tmp, ok := rawArgs["stream_id"]; ok {
+		return ec.unmarshalOUUID2ᚖgithubᚗcomᚋgoogleᚋuuidᚐUUID(ctx, tmp)
+	}
+
+	var zeroVal *uuid.UUID
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_DataStream_events_argsLogLevel(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*model.LogLevel, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("log_level"))
+	if tmp, ok := rawArgs["log_level"]; ok {
+		return ec.unmarshalOLogLevel2ᚖgithubᚗcomᚋmaddsuaᚋeventdbᚑnextᚋgqlᚋresolversᚋmodelᚐLogLevel(ctx, tmp)
+	}
+
+	var zeroVal *model.LogLevel
+	return zeroVal, nil
+}
 
 func (ec *executionContext) field_Mutation_authSigninPassword_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
@@ -1191,13 +1282,36 @@ func (ec *executionContext) field_Query_stream_args(ctx context.Context, rawArgs
 func (ec *executionContext) field_Query_stream_argsID(
 	ctx context.Context,
 	rawArgs map[string]any,
-) (*uuid.UUID, error) {
+) (uuid.UUID, error) {
 	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
 	if tmp, ok := rawArgs["id"]; ok {
-		return ec.unmarshalOUUID2ᚖgithubᚗcomᚋgoogleᚋuuidᚐUUID(ctx, tmp)
+		return ec.unmarshalNUUID2githubᚗcomᚋgoogleᚋuuidᚐUUID(ctx, tmp)
 	}
 
-	var zeroVal *uuid.UUID
+	var zeroVal uuid.UUID
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_streams_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Query_streams_argsPage(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["page"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Query_streams_argsPage(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*int, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("page"))
+	if tmp, ok := rawArgs["page"]; ok {
+		return ec.unmarshalOInt2ᚖint(ctx, tmp)
+	}
+
+	var zeroVal *int
 	return zeroVal, nil
 }
 
@@ -1651,7 +1765,7 @@ func (ec *executionContext) _DataStream_events(ctx context.Context, field graphq
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.Events, nil
+		return ec.resolvers.DataStream().Events(rctx, obj, fc.Args["from"].(*time.Time), fc.Args["to"].(*time.Time), fc.Args["stream_id"].(*uuid.UUID), fc.Args["log_level"].(*model.LogLevel))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1668,12 +1782,12 @@ func (ec *executionContext) _DataStream_events(ctx context.Context, field graphq
 	return ec.marshalNStreamEvent2ᚕgithubᚗcomᚋmaddsuaᚋeventdbᚑnextᚋgqlᚋresolversᚋmodelᚐStreamEventᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_DataStream_events(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_DataStream_events(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "DataStream",
 		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
+		IsMethod:   true,
+		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
 			case "id":
@@ -1696,11 +1810,22 @@ func (ec *executionContext) fieldContext_DataStream_events(_ context.Context, fi
 			return nil, fmt.Errorf("no field named %q was found under type StreamEvent", field.Name)
 		},
 	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_DataStream_events_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
 	return fc, nil
 }
 
-func (ec *executionContext) _DataStreamInfo_id(ctx context.Context, field graphql.CollectedField, obj *model.DataStreamInfo) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_DataStreamInfo_id(ctx, field)
+func (ec *executionContext) _DataStreamsPage_entries(ctx context.Context, field graphql.CollectedField, obj *model.DataStreamsPage) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_DataStreamsPage_entries(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -1713,7 +1838,7 @@ func (ec *executionContext) _DataStreamInfo_id(ctx context.Context, field graphq
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.ID, nil
+		return obj.Entries, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1725,26 +1850,40 @@ func (ec *executionContext) _DataStreamInfo_id(ctx context.Context, field graphq
 		}
 		return graphql.Null
 	}
-	res := resTmp.(uuid.UUID)
+	res := resTmp.([]model.DataStream)
 	fc.Result = res
-	return ec.marshalNUUID2githubᚗcomᚋgoogleᚋuuidᚐUUID(ctx, field.Selections, res)
+	return ec.marshalNDataStream2ᚕgithubᚗcomᚋmaddsuaᚋeventdbᚑnextᚋgqlᚋresolversᚋmodelᚐDataStreamᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_DataStreamInfo_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_DataStreamsPage_entries(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
-		Object:     "DataStreamInfo",
+		Object:     "DataStreamsPage",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type UUID does not have child fields")
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_DataStream_id(ctx, field)
+			case "push_key":
+				return ec.fieldContext_DataStream_push_key(ctx, field)
+			case "name":
+				return ec.fieldContext_DataStream_name(ctx, field)
+			case "created":
+				return ec.fieldContext_DataStream_created(ctx, field)
+			case "updated":
+				return ec.fieldContext_DataStream_updated(ctx, field)
+			case "events":
+				return ec.fieldContext_DataStream_events(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type DataStream", field.Name)
 		},
 	}
 	return fc, nil
 }
 
-func (ec *executionContext) _DataStreamInfo_name(ctx context.Context, field graphql.CollectedField, obj *model.DataStreamInfo) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_DataStreamInfo_name(ctx, field)
+func (ec *executionContext) _DataStreamsPage_has_next(ctx context.Context, field graphql.CollectedField, obj *model.DataStreamsPage) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_DataStreamsPage_has_next(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -1757,7 +1896,7 @@ func (ec *executionContext) _DataStreamInfo_name(ctx context.Context, field grap
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.Name, nil
+		return obj.HasNext, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1769,19 +1908,19 @@ func (ec *executionContext) _DataStreamInfo_name(ctx context.Context, field grap
 		}
 		return graphql.Null
 	}
-	res := resTmp.(string)
+	res := resTmp.(bool)
 	fc.Result = res
-	return ec.marshalNString2string(ctx, field.Selections, res)
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_DataStreamInfo_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_DataStreamsPage_has_next(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
-		Object:     "DataStreamInfo",
+		Object:     "DataStreamsPage",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
+			return nil, errors.New("field of type Boolean does not have child fields")
 		},
 	}
 	return fc, nil
@@ -2548,7 +2687,7 @@ func (ec *executionContext) _Query_streams(ctx context.Context, field graphql.Co
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Streams(rctx)
+		return ec.resolvers.Query().Streams(rctx, fc.Args["page"].(*int))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -2560,12 +2699,12 @@ func (ec *executionContext) _Query_streams(ctx context.Context, field graphql.Co
 		}
 		return graphql.Null
 	}
-	res := resTmp.([]model.DataStream)
+	res := resTmp.(*model.DataStreamsPage)
 	fc.Result = res
-	return ec.marshalNDataStream2ᚕgithubᚗcomᚋmaddsuaᚋeventdbᚑnextᚋgqlᚋresolversᚋmodelᚐDataStreamᚄ(ctx, field.Selections, res)
+	return ec.marshalNDataStreamsPage2ᚖgithubᚗcomᚋmaddsuaᚋeventdbᚑnextᚋgqlᚋresolversᚋmodelᚐDataStreamsPage(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Query_streams(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_streams(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -2573,21 +2712,24 @@ func (ec *executionContext) fieldContext_Query_streams(_ context.Context, field 
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "id":
-				return ec.fieldContext_DataStream_id(ctx, field)
-			case "push_key":
-				return ec.fieldContext_DataStream_push_key(ctx, field)
-			case "name":
-				return ec.fieldContext_DataStream_name(ctx, field)
-			case "created":
-				return ec.fieldContext_DataStream_created(ctx, field)
-			case "updated":
-				return ec.fieldContext_DataStream_updated(ctx, field)
-			case "events":
-				return ec.fieldContext_DataStream_events(ctx, field)
+			case "entries":
+				return ec.fieldContext_DataStreamsPage_entries(ctx, field)
+			case "has_next":
+				return ec.fieldContext_DataStreamsPage_has_next(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type DataStream", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type DataStreamsPage", field.Name)
 		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_streams_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -2606,7 +2748,7 @@ func (ec *executionContext) _Query_stream(ctx context.Context, field graphql.Col
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Stream(rctx, fc.Args["id"].(*uuid.UUID))
+		return ec.resolvers.Query().Stream(rctx, fc.Args["id"].(uuid.UUID))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -3123,9 +3265,9 @@ func (ec *executionContext) _StreamEvent_stream(ctx context.Context, field graph
 		}
 		return graphql.Null
 	}
-	res := resTmp.(*model.DataStreamInfo)
+	res := resTmp.(*model.DataStream)
 	fc.Result = res
-	return ec.marshalNDataStreamInfo2ᚖgithubᚗcomᚋmaddsuaᚋeventdbᚑnextᚋgqlᚋresolversᚋmodelᚐDataStreamInfo(ctx, field.Selections, res)
+	return ec.marshalNDataStream2ᚖgithubᚗcomᚋmaddsuaᚋeventdbᚑnextᚋgqlᚋresolversᚋmodelᚐDataStream(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_StreamEvent_stream(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -3137,11 +3279,19 @@ func (ec *executionContext) fieldContext_StreamEvent_stream(_ context.Context, f
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
 			case "id":
-				return ec.fieldContext_DataStreamInfo_id(ctx, field)
+				return ec.fieldContext_DataStream_id(ctx, field)
+			case "push_key":
+				return ec.fieldContext_DataStream_push_key(ctx, field)
 			case "name":
-				return ec.fieldContext_DataStreamInfo_name(ctx, field)
+				return ec.fieldContext_DataStream_name(ctx, field)
+			case "created":
+				return ec.fieldContext_DataStream_created(ctx, field)
+			case "updated":
+				return ec.fieldContext_DataStream_updated(ctx, field)
+			case "events":
+				return ec.fieldContext_DataStream_events(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type DataStreamInfo", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type DataStream", field.Name)
 		},
 	}
 	return fc, nil
@@ -3168,14 +3318,11 @@ func (ec *executionContext) _StreamEvent_client_ip(ctx context.Context, field gr
 		return graphql.Null
 	}
 	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
 		return graphql.Null
 	}
-	res := resTmp.(string)
+	res := resTmp.(*string)
 	fc.Result = res
-	return ec.marshalNString2string(ctx, field.Selections, res)
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_StreamEvent_client_ip(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -3212,14 +3359,11 @@ func (ec *executionContext) _StreamEvent_transaction_id(ctx context.Context, fie
 		return graphql.Null
 	}
 	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
 		return graphql.Null
 	}
-	res := resTmp.(string)
+	res := resTmp.(*string)
 	fc.Result = res
-	return ec.marshalNString2string(ctx, field.Selections, res)
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_StreamEvent_transaction_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -5475,30 +5619,61 @@ func (ec *executionContext) _DataStream(ctx context.Context, sel ast.SelectionSe
 		case "id":
 			out.Values[i] = ec._DataStream_id(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "push_key":
 			out.Values[i] = ec._DataStream_push_key(ctx, field, obj)
 		case "name":
 			out.Values[i] = ec._DataStream_name(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "created":
 			out.Values[i] = ec._DataStream_created(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "updated":
 			out.Values[i] = ec._DataStream_updated(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "events":
-			out.Values[i] = ec._DataStream_events(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._DataStream_events(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
 			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -5522,24 +5697,24 @@ func (ec *executionContext) _DataStream(ctx context.Context, sel ast.SelectionSe
 	return out
 }
 
-var dataStreamInfoImplementors = []string{"DataStreamInfo"}
+var dataStreamsPageImplementors = []string{"DataStreamsPage"}
 
-func (ec *executionContext) _DataStreamInfo(ctx context.Context, sel ast.SelectionSet, obj *model.DataStreamInfo) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, dataStreamInfoImplementors)
+func (ec *executionContext) _DataStreamsPage(ctx context.Context, sel ast.SelectionSet, obj *model.DataStreamsPage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, dataStreamsPageImplementors)
 
 	out := graphql.NewFieldSet(fields)
 	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
-			out.Values[i] = graphql.MarshalString("DataStreamInfo")
-		case "id":
-			out.Values[i] = ec._DataStreamInfo_id(ctx, field, obj)
+			out.Values[i] = graphql.MarshalString("DataStreamsPage")
+		case "entries":
+			out.Values[i] = ec._DataStreamsPage_entries(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "name":
-			out.Values[i] = ec._DataStreamInfo_name(ctx, field, obj)
+		case "has_next":
+			out.Values[i] = ec._DataStreamsPage_has_next(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -5988,14 +6163,8 @@ func (ec *executionContext) _StreamEvent(ctx context.Context, sel ast.SelectionS
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "client_ip":
 			out.Values[i] = ec._StreamEvent_client_ip(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				atomic.AddUint32(&out.Invalids, 1)
-			}
 		case "transaction_id":
 			out.Values[i] = ec._StreamEvent_transaction_id(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				atomic.AddUint32(&out.Invalids, 1)
-			}
 		case "date":
 			out.Values[i] = ec._StreamEvent_date(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -6555,18 +6724,18 @@ func (ec *executionContext) marshalNDataStream2ᚖgithubᚗcomᚋmaddsuaᚋevent
 	return ec._DataStream(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNDataStreamInfo2githubᚗcomᚋmaddsuaᚋeventdbᚑnextᚋgqlᚋresolversᚋmodelᚐDataStreamInfo(ctx context.Context, sel ast.SelectionSet, v model.DataStreamInfo) graphql.Marshaler {
-	return ec._DataStreamInfo(ctx, sel, &v)
+func (ec *executionContext) marshalNDataStreamsPage2githubᚗcomᚋmaddsuaᚋeventdbᚑnextᚋgqlᚋresolversᚋmodelᚐDataStreamsPage(ctx context.Context, sel ast.SelectionSet, v model.DataStreamsPage) graphql.Marshaler {
+	return ec._DataStreamsPage(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNDataStreamInfo2ᚖgithubᚗcomᚋmaddsuaᚋeventdbᚑnextᚋgqlᚋresolversᚋmodelᚐDataStreamInfo(ctx context.Context, sel ast.SelectionSet, v *model.DataStreamInfo) graphql.Marshaler {
+func (ec *executionContext) marshalNDataStreamsPage2ᚖgithubᚗcomᚋmaddsuaᚋeventdbᚑnextᚋgqlᚋresolversᚋmodelᚐDataStreamsPage(ctx context.Context, sel ast.SelectionSet, v *model.DataStreamsPage) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
 		}
 		return graphql.Null
 	}
-	return ec._DataStreamInfo(ctx, sel, v)
+	return ec._DataStreamsPage(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNDate2timeᚐTime(ctx context.Context, v any) (time.Time, error) {
@@ -7083,6 +7252,22 @@ func (ec *executionContext) marshalODate2ᚖtimeᚐTime(ctx context.Context, sel
 		return graphql.Null
 	}
 	res := graphql.MarshalTime(*v)
+	return res
+}
+
+func (ec *executionContext) unmarshalOInt2ᚖint(ctx context.Context, v any) (*int, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := graphql.UnmarshalInt(v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOInt2ᚖint(ctx context.Context, sel ast.SelectionSet, v *int) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	res := graphql.MarshalInt(*v)
 	return res
 }
 

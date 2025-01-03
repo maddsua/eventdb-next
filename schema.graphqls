@@ -11,8 +11,8 @@ schema {
 type Query {
     authSessionState: UserAuthState
     authSigninState: SigninState
-    streams: [DataStream!]!
-    stream(id: UUID): DataStream!
+    streams(page: Int): DataStreamsPage!
+    stream(id: UUID!): DataStream!
     feed(from: Date, to: Date, stream_id: UUID, log_level: LogLevel, client_ip: String, transaction_id: String): [StreamEvent!]!
     activity(from: Date, to: Date): [ActivityPoint!]!
 }
@@ -34,29 +34,29 @@ type UserAuthState {
     username: String!
 }
 
+type DataStreamsPage {
+    entries: [DataStream!]!
+    has_next: Boolean!
+}
+
 type DataStream {
     id: UUID!
     push_key: String
     name: String!
     created: Date!
     updated: Date!
-    events: [StreamEvent!]!
+    events(from: Date, to: Date, stream_id: UUID, log_level: LogLevel): [StreamEvent!]!
 }
 
 type StreamEvent {
     id: UUID!
-    stream: DataStreamInfo!
-    client_ip: String!
-    transaction_id: String!
+    stream: DataStream!
+    client_ip: String
+    transaction_id: String
     date: Date!
     message: String!
     level: LogLevel!
     fields: [EventField!]!
-}
-
-type DataStreamInfo {
-    id: UUID!
-    name: String!
 }
 
 enum LogLevel {

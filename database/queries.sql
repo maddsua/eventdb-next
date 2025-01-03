@@ -59,3 +59,10 @@ where (id = sqlc.narg(id) or sqlc.narg(id) is null)
 	and (stream_id = sqlc.narg(stream_id) or sqlc.narg(stream_id) is null)
 	and (created_at < sqlc.narg(before) or sqlc.narg(before) is null)
 	and (created_at > sqlc.narg(after) or sqlc.narg(after) is null);
+
+-- name: GetEvents :many
+select * from events
+where (stream_id = sqlc.narg(stream_id) or sqlc.narg(stream_id) is null)
+	and (level = sqlc.narg(level) or sqlc.narg(level) is null)
+	and (created_at < sqlc.narg(before) or sqlc.narg(before) is null)
+	and (created_at > sqlc.narg(after) or sqlc.narg(after) is null);

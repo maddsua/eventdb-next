@@ -34,3 +34,7 @@ models:
     fields:
       stream:
         resolver: true
+  DataStream:
+    fields:
+      events:
+        resolver: true

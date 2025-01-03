@@ -1,0 +1,89 @@
+
+scalar Date
+scalar UUID
+
+schema {
+    query: Query
+    mutation: Mutation
+    subscription: Subscription
+}
+
+type Query {
+    authSessionState: UserAuthState
+    authSigninState: SigninState
+    streams: [DataStream!]!
+    stream(id: UUID): DataStream!
+    feed(from: Date, to: Date, stream_id: UUID, log_level: LogLevel, client_ip: String, request_id: String): [StreamEvent!]!
+    activity(from: Date, to: Date): [ActivityPoint!]!
+}
+
+type SigninState {
+    expires: Date!
+    username: String
+    status: SigninStatus!
+}
+
+type SigninStatus {
+    NEEDS_2FA,
+    COMPLETE
+}
+
+type UserAuthState {
+    user_id: UUID!
+    expires: Date!
+    username: String!
+}
+
+type DataStream {
+    id: UUID!
+    name: String!
+    created: Date!
+    updated: Date!
+    events: [StreamEvent!]!
+}
+
+type StreamEvent {
+    id: UUID!
+    stream: DataStreamInfo!
+    client_ip: String!
+    request_id: String!
+    date: Date!
+    message: String!
+    level: LogLevel!
+    fields: [EventField!]!
+}
+
+type DataStreamInfo {
+    id: UUID!
+    name: String!
+}
+
+enum LogLevel {
+    INFO,
+    WARNING,
+    ERROR,
+    DEBUG
+}
+
+type EventField {
+    key: String!
+    value: String!
+}
+
+type ActivityPoint {
+    value: Int!
+    level: LogLevel!
+}
+
+type Mutation {
+    authSigninPassword(username: String!, password: String!): SigninState!
+    authSigninVerify2fa(code: Int!): SigninState!
+    authSignout: UserAuthState
+    createStream(name: String!): DataStream!
+    deleteStream(id: UUID!): UUID!
+    deleteEvents(stream: UUID, from: Date, to: Date): [UUID!]!
+}
+
+type Subscription {
+    feed(stream_id: UUID, log_level: LogLevel, client_ip: String, request_id: String): [StreamEvent!]!
+}

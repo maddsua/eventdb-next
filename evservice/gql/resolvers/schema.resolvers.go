@@ -95,7 +95,7 @@ func (r *mutationResolver) DeleteStream(ctx context.Context, id uuid.UUID) (uuid
 // DeleteEvents is the resolver for the deleteEvents field.
 func (r *mutationResolver) DeleteEvents(ctx context.Context, streamID *uuid.UUID, after *time.Time, before *time.Time) ([]uuid.UUID, error) {
 	//	todo: add auth stuff here
-
+	//	todo: implement
 	panic(fmt.Errorf("not implemented: DeleteEvents - deleteEvents"))
 }
 
@@ -272,13 +272,31 @@ func (r *queryResolver) Stream(ctx context.Context, id uuid.UUID) (*model.DataSt
 func (r *queryResolver) Feed(ctx context.Context, from *time.Time, to *time.Time, streamID *uuid.UUID, logLevel *model.LogLevel, clientIP *string, transactionID *string) ([]model.StreamEvent, error) {
 	//	todo: add auth stuff here
 
-	panic(fmt.Errorf("not implemented: Feed - feed"))
+	entries, err := r.DB.GetEvents(ctx, sqliteops.GetEventsParams{
+		StreamID: scalars.NullUuidString(streamID),
+		Level:    scalars.NullString((*string)(logLevel)),
+		Before:   scalars.NullEpoch(to),
+		After:    scalars.NullEpoch(from),
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]model.StreamEvent, len(entries))
+	for idx, item := range entries {
+		if result[idx], err = model.TransformStreamEvent(item); err != nil {
+			return nil, err
+		}
+	}
+
+	return result, nil
 }
 
 // Activity is the resolver for the activity field.
 func (r *queryResolver) Activity(ctx context.Context, from *time.Time, to *time.Time) ([]model.ActivityPoint, error) {
 	//	todo: add auth stuff here
-
+	//	todo: implement
 	panic(fmt.Errorf("not implemented: Activity - activity"))
 }
 

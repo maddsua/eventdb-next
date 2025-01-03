@@ -1,0 +1,36 @@
+schema:
+  - ../schema.graphqls
+
+exec:
+  filename: gql/resolvers/generated.go
+  package: resolvers
+
+model:
+  filename: gql/resolvers/model/models_gen.go
+  package: model
+
+resolver:
+  layout: follow-schema
+  dir: gql/resolvers
+  package: resolvers
+  filename_template: "{name}.resolvers.go"
+
+call_argument_directives_with_null: true
+resolvers_always_return_pointers: true
+struct_fields_always_pointers: false
+omit_slice_element_pointers: true
+
+models:
+  UUID:
+    model:
+      - github.com/99designs/gqlgen/graphql.UUID
+  Int:
+    model:
+      - github.com/99designs/gqlgen/graphql.Int
+  Date:
+    model:
+      - github.com/99designs/gqlgen/graphql.Time
+  StreamEvent:
+    fields:
+      stream:
+        resolver: true

@@ -23,7 +23,7 @@ type SigninState {
     status: SigninStatus!
 }
 
-type SigninStatus {
+enum SigninStatus {
     NEEDS_2FA,
     COMPLETE
 }

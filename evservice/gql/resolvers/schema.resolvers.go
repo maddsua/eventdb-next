@@ -62,7 +62,7 @@ func (r *mutationResolver) CreateStream(ctx context.Context, name string) (*mode
 
 	result := &model.DataStream{
 		ID:      uuid.New(),
-		PushKey: scalars.MkPtr(utils.NewToken(8)),
+		PushKey: scalars.MkPtr(utils.NewToken(16)),
 		Name:    name,
 		Created: time.Now(),
 		Updated: time.Now(),
@@ -112,7 +112,7 @@ func (r *mutationResolver) RefreshStreamPushKey(ctx context.Context, streamID uu
 
 	if _, err := tx.SetStreamPushKey(ctx, sqliteops.SetStreamPushKeyParams{
 		ID:      streamID.String(),
-		PushKey: null.StringFrom(utils.NewToken(8)).NullString,
+		PushKey: null.StringFrom(utils.NewToken(16)).NullString,
 	}); err != nil {
 		return nil, err
 	}

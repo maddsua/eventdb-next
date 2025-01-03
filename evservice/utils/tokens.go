@@ -12,7 +12,7 @@ func NewToken(n int) string {
 		panic(err)
 	}
 
-	return Truncate(base64.RawStdEncoding.EncodeToString(buff), n)
+	return Truncate(base64.RawURLEncoding.EncodeToString(buff), n)
 }
 
 func Truncate(val string, max int) string {

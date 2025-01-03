@@ -1,0 +1,54 @@
+openapi: 3.0.3
+info:
+  title: EventDB push API - OpenAPI 3.0
+  version: 2.0.0
+servers:
+  - url: https://localhost:8080/api/v2
+paths:
+  /push:
+    post:
+      summary: Push events
+      description: Push a new event or a batch of events
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PushEventEntry'
+          application/json+batch:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/PushEventEntry'
+      responses:
+        204:
+          description: OK
+        400:
+          description: Invalid payload / invalid stream id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        500:
+          description: Something went really wrong
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    PushEventEntry:
+      type: object
+      properties:
+        message:
+          type: string
+        fields:
+          type: object
+          additionalProperties: true
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            message:
+              type: string

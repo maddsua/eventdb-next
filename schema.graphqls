@@ -3,91 +3,91 @@ scalar Date
 scalar UUID
 
 schema {
-    query: Query
-    mutation: Mutation
-    subscription: Subscription
+	query: Query
+	mutation: Mutation
+	subscription: Subscription
 }
 
 type Query {
-    authSessionState: UserAuthState
-    authSigninState: SigninState
-    streams(page: Int): DataStreamsPage!
-    stream(id: UUID!): DataStream!
-    feed(from: Date, to: Date, stream_id: UUID, log_level: LogLevel, client_ip: String, transaction_id: String): [StreamEvent!]!
-    activity(from: Date, to: Date): [ActivityPoint!]!
+	authSessionState: UserAuthState
+	authSigninState: SigninState
+	streams(page: Int): DataStreamsPage!
+	stream(id: UUID!): DataStream!
+	feed(from: Date, to: Date, stream_id: UUID, log_level: LogLevel, client_ip: String, transaction_id: String): [StreamEvent!]!
+	activity(from: Date, to: Date): [ActivityPoint!]!
 }
 
 type SigninState {
-    expires: Date!
-    username: String
-    status: SigninStatus!
+	expires: Date!
+	username: String
+	status: SigninStatus!
 }
 
 enum SigninStatus {
-    NEEDS_2FA,
-    COMPLETE
+	NEEDS_2FA,
+	COMPLETE
 }
 
 type UserAuthState {
-    user_id: UUID!
-    expires: Date!
-    username: String!
+	user_id: UUID!
+	expires: Date!
+	username: String!
 }
 
 type DataStreamsPage {
-    entries: [DataStream!]!
-    has_next: Boolean!
+	entries: [DataStream!]!
+	has_next: Boolean!
 }
 
 type DataStream {
-    id: UUID!
-    push_key: String
-    name: String!
-    created: Date!
-    updated: Date!
-    events(from: Date, to: Date, stream_id: UUID, log_level: LogLevel): [StreamEvent!]!
+	id: UUID!
+	push_key: String
+	name: String!
+	created: Date!
+	updated: Date!
+	events(from: Date, to: Date, stream_id: UUID, log_level: LogLevel): [StreamEvent!]!
 }
 
 type StreamEvent {
-    id: UUID!
-    stream: DataStream!
-    client_ip: String
-    transaction_id: String
-    date: Date!
-    message: String!
-    level: LogLevel!
-    fields: [EventField!]!
+	id: UUID!
+	stream: DataStream!
+	client_ip: String
+	transaction_id: String
+	date: Date!
+	message: String!
+	level: LogLevel!
+	fields: [EventField!]!
 }
 
 enum LogLevel {
-    INFO,
-    WARNING,
-    ERROR,
-    DEBUG
+	INFO,
+	WARNING,
+	ERROR,
+	DEBUG
 }
 
 type EventField {
-    key: String!
-    value: String!
+	key: String!
+	value: String!
 }
 
 type ActivityPoint {
-    value: Int!
-    level: LogLevel!
+	value: Int!
+	level: LogLevel!
 }
 
 type Mutation {
-    authSigninPassword(username: String!, password: String!): SigninState!
-    authSigninVerify2fa(code: Int!): SigninState!
-    authSignout: UserAuthState
-    createStream(name: String!): DataStream!
-    deleteStream(id: UUID!): UUID!
-    deleteEvents(stream_id: UUID, after: Date, before: Date): [UUID!]!
-    refreshStreamPushKey(stream_id: UUID!): DataStream!
-    clearStreamPushKey(stream_id: UUID!): DataStream!
-    updateStreamName(stream_id: UUID!, name: String!): DataStream!
+	authSigninPassword(username: String!, password: String!): SigninState!
+	authSigninVerify2fa(code: Int!): SigninState!
+	authSignout: UserAuthState
+	createStream(name: String!): DataStream!
+	deleteStream(id: UUID!): UUID!
+	deleteEvents(stream_id: UUID, after: Date, before: Date): [UUID!]!
+	refreshStreamPushKey(stream_id: UUID!): DataStream!
+	clearStreamPushKey(stream_id: UUID!): DataStream!
+	updateStreamName(stream_id: UUID!, name: String!): DataStream!
 }
 
 type Subscription {
-    feed(stream_id: UUID, log_level: LogLevel, client_ip: String, transaction_id: String): [StreamEvent!]!
+	feed(stream_id: UUID, log_level: LogLevel, client_ip: String, transaction_id: String): [StreamEvent!]!
 }

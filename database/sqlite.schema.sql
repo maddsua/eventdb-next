@@ -1,6 +1,6 @@
 create table streams (
 	id text unique primary key,
-	push_key text not null,
+	push_key text,
 	name text not null,
 	created_at integer not null default (unixepoch()),
 	updated_at integer not null  default (unixepoch())
@@ -8,14 +8,14 @@ create table streams (
 
 create table events (
 	id text unique primary key,
-	date integer not null default (unixepoch()),
+	created_at integer not null default (unixepoch()),
 	stream_id text not null,
-	client_ip text null,
-	request_id text null,
+	client_ip text,
+	transaction_id text,
 	type text not null,
-	level text null,
-	message text null,
-	fields text null,
+	level text,
+	message text,
+	fields text,
 
 	foreign key(stream_id) references streams(id) on update cascade on delete cascade
 );

@@ -12,8 +12,9 @@ import (
 )
 
 type ActivityPoint struct {
-	Value int      `json:"value"`
-	Level LogLevel `json:"level"`
+	Errors int       `json:"errors"`
+	Info   int       `json:"info"`
+	Date   time.Time `json:"date"`
 }
 
 type DataStream struct {

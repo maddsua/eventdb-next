@@ -23,8 +23,8 @@ func (r *dataStreamResolver) Events(ctx context.Context, obj *model.DataStream, 
 
 	entries, err := r.DB.GetEvents(ctx, sqliteops.GetEventsParams{
 		StreamID: scalars.NullUuidString(streamID),
-		Before:   scalars.NullEpoch(to),
 		After:    scalars.NullEpoch(from),
+		Before:   scalars.NullEpoch(to),
 		Level:    null.StringFromPtr((*string)(logLevel)).NullString,
 	})
 	if err != nil {
@@ -93,10 +93,27 @@ func (r *mutationResolver) DeleteStream(ctx context.Context, id uuid.UUID) (uuid
 }
 
 // DeleteEvents is the resolver for the deleteEvents field.
-func (r *mutationResolver) DeleteEvents(ctx context.Context, streamID *uuid.UUID, after *time.Time, before *time.Time) ([]uuid.UUID, error) {
+func (r *mutationResolver) DeleteEvents(ctx context.Context, streamID *uuid.UUID, from *time.Time, to *time.Time) ([]uuid.UUID, error) {
 	//	todo: add auth stuff here
-	//	todo: implement
-	panic(fmt.Errorf("not implemented: DeleteEvents - deleteEvents"))
+
+	affected, err := r.DB.DeleteEvents(ctx, sqliteops.DeleteEventsParams{
+		StreamID: scalars.NullUuidString(streamID),
+		After:    scalars.NullEpoch(from),
+		Before:   scalars.NullEpoch(to),
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]uuid.UUID, len(affected))
+	for idx, item := range affected {
+		if result[idx], err = uuid.Parse(item); err != nil {
+			return nil, err
+		}
+	}
+
+	return result, nil
 }
 
 // RefreshStreamPushKey is the resolver for the refreshStreamPushKey field.
@@ -272,6 +289,14 @@ func (r *queryResolver) Stream(ctx context.Context, id uuid.UUID) (*model.DataSt
 func (r *queryResolver) Feed(ctx context.Context, from *time.Time, to *time.Time, streamID *uuid.UUID, logLevel *model.LogLevel, clientIP *string, transactionID *string) ([]model.StreamEvent, error) {
 	//	todo: add auth stuff here
 
+	if from == nil {
+		from = scalars.MkPtr(time.Now().Add(-time.Hour))
+	}
+
+	if to == nil {
+		to = scalars.MkPtr(time.Now())
+	}
+
 	entries, err := r.DB.GetEvents(ctx, sqliteops.GetEventsParams{
 		StreamID: scalars.NullUuidString(streamID),
 		Level:    scalars.NullString((*string)(logLevel)),
@@ -296,14 +321,58 @@ func (r *queryResolver) Feed(ctx context.Context, from *time.Time, to *time.Time
 // Activity is the resolver for the activity field.
 func (r *queryResolver) Activity(ctx context.Context, from *time.Time, to *time.Time) ([]model.ActivityPoint, error) {
 	//	todo: add auth stuff here
-	//	todo: implement
-	panic(fmt.Errorf("not implemented: Activity - activity"))
+
+	const sampleSize = time.Minute
+
+	if from == nil {
+		from = scalars.MkPtr(time.Now().Add(-time.Hour))
+	}
+
+	if to == nil {
+		to = scalars.MkPtr(time.Now())
+	}
+
+	entries, err := r.DB.GetActivity(ctx, sqliteops.GetActivityParams{
+		Before: scalars.NullEpoch(to),
+		After:  scalars.NullEpoch(from),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	samples := int(to.Sub(*from) / sampleSize)
+	if samples <= 0 {
+		samples = 1
+	}
+
+	result := make([]model.ActivityPoint, samples)
+	for _, entry := range entries {
+
+		idx := int(time.Unix(entry.CreatedAt, 0).Sub(*from) / sampleSize)
+		if idx >= len(result) {
+			idx = len(result) - 1
+		}
+
+		switch model.LogLevel(entry.Level.String) {
+		case model.LogLevelDebug, model.LogLevelInfo:
+			result[idx].Info++
+		default:
+			result[idx].Errors++
+		}
+	}
+
+	for idx := range result {
+		result[idx].Date = from.Add(time.Duration(idx) * sampleSize)
+	}
+
+	return result, nil
 }
 
 // Stream is the resolver for the stream field.
 func (r *streamEventResolver) Stream(ctx context.Context, obj *model.StreamEvent) (*model.DataStream, error) {
 	//	todo: add auth stuff here
 
+	//	todo: fix nil output
 	entry, err := r.DB.GetStreamByID(ctx, obj.Stream.ID.String())
 	if err != nil {
 		return nil, err

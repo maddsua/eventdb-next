@@ -72,8 +72,9 @@ type EventField {
 }
 
 type ActivityPoint {
-	value: Int!
-	level: LogLevel!
+	errors: Int!
+	info: Int!
+	date: Date!
 }
 
 type Mutation {
@@ -82,7 +83,7 @@ type Mutation {
 	authSignout: UserAuthState
 	createStream(name: String!): DataStream!
 	deleteStream(id: UUID!): UUID!
-	deleteEvents(stream_id: UUID, after: Date, before: Date): [UUID!]!
+	deleteEvents(stream_id: UUID, from: Date, to: Date): [UUID!]!
 	refreshStreamPushKey(stream_id: UUID!): DataStream!
 	clearStreamPushKey(stream_id: UUID!): DataStream!
 	updateStreamName(stream_id: UUID!, name: String!): DataStream!

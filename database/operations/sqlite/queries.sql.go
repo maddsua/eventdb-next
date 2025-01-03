@@ -83,12 +83,13 @@ func (q *Queries) CreateStream(ctx context.Context, arg CreateStreamParams) (int
 	return result.RowsAffected()
 }
 
-const deleteEvents = `-- name: DeleteEvents :execrows
+const deleteEvents = `-- name: DeleteEvents :many
 delete from events
 where (id = ?1 or ?1 is null)
 	and (stream_id = ?2 or ?2 is null)
 	and (created_at < ?3 or ?3 is null)
 	and (created_at > ?4 or ?4 is null)
+returning id
 `
 
 type DeleteEventsParams struct {
@@ -98,17 +99,74 @@ type DeleteEventsParams struct {
 	After    sql.NullInt64
 }
 
-func (q *Queries) DeleteEvents(ctx context.Context, arg DeleteEventsParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, deleteEvents,
+func (q *Queries) DeleteEvents(ctx context.Context, arg DeleteEventsParams) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, deleteEvents,
 		arg.ID,
 		arg.StreamID,
 		arg.Before,
 		arg.After,
 	)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return result.RowsAffected()
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getActivity = `-- name: GetActivity :many
+select
+	created_at,
+	level
+from events
+where (created_at < ?1 or ?1 is null)
+	and (created_at > ?2 or ?2 is null)
+`
+
+type GetActivityParams struct {
+	Before sql.NullInt64
+	After  sql.NullInt64
+}
+
+type GetActivityRow struct {
+	CreatedAt int64
+	Level     sql.NullString
+}
+
+func (q *Queries) GetActivity(ctx context.Context, arg GetActivityParams) ([]GetActivityRow, error) {
+	rows, err := q.db.QueryContext(ctx, getActivity, arg.Before, arg.After)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetActivityRow
+	for rows.Next() {
+		var i GetActivityRow
+		if err := rows.Scan(&i.CreatedAt, &i.Level); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getEvents = `-- name: GetEvents :many

@@ -53,8 +53,9 @@ type DirectiveRoot struct {
 
 type ComplexityRoot struct {
 	ActivityPoint struct {
-		Level func(childComplexity int) int
-		Value func(childComplexity int) int
+		Date   func(childComplexity int) int
+		Errors func(childComplexity int) int
+		Info   func(childComplexity int) int
 	}
 
 	DataStream struct {
@@ -82,7 +83,7 @@ type ComplexityRoot struct {
 		AuthSignout          func(childComplexity int) int
 		ClearStreamPushKey   func(childComplexity int, streamID uuid.UUID) int
 		CreateStream         func(childComplexity int, name string) int
-		DeleteEvents         func(childComplexity int, streamID *uuid.UUID, after *time.Time, before *time.Time) int
+		DeleteEvents         func(childComplexity int, streamID *uuid.UUID, from *time.Time, to *time.Time) int
 		DeleteStream         func(childComplexity int, id uuid.UUID) int
 		RefreshStreamPushKey func(childComplexity int, streamID uuid.UUID) int
 		UpdateStreamName     func(childComplexity int, streamID uuid.UUID, name string) int
@@ -134,7 +135,7 @@ type MutationResolver interface {
 	AuthSignout(ctx context.Context) (*model.UserAuthState, error)
 	CreateStream(ctx context.Context, name string) (*model.DataStream, error)
 	DeleteStream(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
-	DeleteEvents(ctx context.Context, streamID *uuid.UUID, after *time.Time, before *time.Time) ([]uuid.UUID, error)
+	DeleteEvents(ctx context.Context, streamID *uuid.UUID, from *time.Time, to *time.Time) ([]uuid.UUID, error)
 	RefreshStreamPushKey(ctx context.Context, streamID uuid.UUID) (*model.DataStream, error)
 	ClearStreamPushKey(ctx context.Context, streamID uuid.UUID) (*model.DataStream, error)
 	UpdateStreamName(ctx context.Context, streamID uuid.UUID, name string) (*model.DataStream, error)
@@ -173,19 +174,26 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 	_ = ec
 	switch typeName + "." + field {
 
-	case "ActivityPoint.level":
-		if e.complexity.ActivityPoint.Level == nil {
+	case "ActivityPoint.date":
+		if e.complexity.ActivityPoint.Date == nil {
 			break
 		}
 
-		return e.complexity.ActivityPoint.Level(childComplexity), true
+		return e.complexity.ActivityPoint.Date(childComplexity), true
 
-	case "ActivityPoint.value":
-		if e.complexity.ActivityPoint.Value == nil {
+	case "ActivityPoint.errors":
+		if e.complexity.ActivityPoint.Errors == nil {
 			break
 		}
 
-		return e.complexity.ActivityPoint.Value(childComplexity), true
+		return e.complexity.ActivityPoint.Errors(childComplexity), true
+
+	case "ActivityPoint.info":
+		if e.complexity.ActivityPoint.Info == nil {
+			break
+		}
+
+		return e.complexity.ActivityPoint.Info(childComplexity), true
 
 	case "DataStream.created":
 		if e.complexity.DataStream.Created == nil {
@@ -327,7 +335,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.DeleteEvents(childComplexity, args["stream_id"].(*uuid.UUID), args["after"].(*time.Time), args["before"].(*time.Time)), true
+		return e.complexity.Mutation.DeleteEvents(childComplexity, args["stream_id"].(*uuid.UUID), args["from"].(*time.Time), args["to"].(*time.Time)), true
 
 	case "Mutation.deleteStream":
 		if e.complexity.Mutation.DeleteStream == nil {
@@ -732,8 +740,9 @@ type EventField {
 }
 
 type ActivityPoint {
-	value: Int!
-	level: LogLevel!
+	errors: Int!
+	info: Int!
+	date: Date!
 }
 
 type Mutation {
@@ -742,7 +751,7 @@ type Mutation {
 	authSignout: UserAuthState
 	createStream(name: String!): DataStream!
 	deleteStream(id: UUID!): UUID!
-	deleteEvents(stream_id: UUID, after: Date, before: Date): [UUID!]!
+	deleteEvents(stream_id: UUID, from: Date, to: Date): [UUID!]!
 	refreshStreamPushKey(stream_id: UUID!): DataStream!
 	clearStreamPushKey(stream_id: UUID!): DataStream!
 	updateStreamName(stream_id: UUID!, name: String!): DataStream!
@@ -954,16 +963,16 @@ func (ec *executionContext) field_Mutation_deleteEvents_args(ctx context.Context
 		return nil, err
 	}
 	args["stream_id"] = arg0
-	arg1, err := ec.field_Mutation_deleteEvents_argsAfter(ctx, rawArgs)
+	arg1, err := ec.field_Mutation_deleteEvents_argsFrom(ctx, rawArgs)
 	if err != nil {
 		return nil, err
 	}
-	args["after"] = arg1
-	arg2, err := ec.field_Mutation_deleteEvents_argsBefore(ctx, rawArgs)
+	args["from"] = arg1
+	arg2, err := ec.field_Mutation_deleteEvents_argsTo(ctx, rawArgs)
 	if err != nil {
 		return nil, err
 	}
-	args["before"] = arg2
+	args["to"] = arg2
 	return args, nil
 }
 func (ec *executionContext) field_Mutation_deleteEvents_argsStreamID(
@@ -979,12 +988,12 @@ func (ec *executionContext) field_Mutation_deleteEvents_argsStreamID(
 	return zeroVal, nil
 }
 
-func (ec *executionContext) field_Mutation_deleteEvents_argsAfter(
+func (ec *executionContext) field_Mutation_deleteEvents_argsFrom(
 	ctx context.Context,
 	rawArgs map[string]any,
 ) (*time.Time, error) {
-	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("after"))
-	if tmp, ok := rawArgs["after"]; ok {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("from"))
+	if tmp, ok := rawArgs["from"]; ok {
 		return ec.unmarshalODate2ᚖtimeᚐTime(ctx, tmp)
 	}
 
@@ -992,12 +1001,12 @@ func (ec *executionContext) field_Mutation_deleteEvents_argsAfter(
 	return zeroVal, nil
 }
 
-func (ec *executionContext) field_Mutation_deleteEvents_argsBefore(
+func (ec *executionContext) field_Mutation_deleteEvents_argsTo(
 	ctx context.Context,
 	rawArgs map[string]any,
 ) (*time.Time, error) {
-	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("before"))
-	if tmp, ok := rawArgs["before"]; ok {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("to"))
+	if tmp, ok := rawArgs["to"]; ok {
 		return ec.unmarshalODate2ᚖtimeᚐTime(ctx, tmp)
 	}
 
@@ -1446,8 +1455,8 @@ func (ec *executionContext) field___Type_fields_argsIncludeDeprecated(
 
 // region    **************************** field.gotpl *****************************
 
-func (ec *executionContext) _ActivityPoint_value(ctx context.Context, field graphql.CollectedField, obj *model.ActivityPoint) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_ActivityPoint_value(ctx, field)
+func (ec *executionContext) _ActivityPoint_errors(ctx context.Context, field graphql.CollectedField, obj *model.ActivityPoint) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ActivityPoint_errors(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -1460,7 +1469,7 @@ func (ec *executionContext) _ActivityPoint_value(ctx context.Context, field grap
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.Value, nil
+		return obj.Errors, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1477,7 +1486,7 @@ func (ec *executionContext) _ActivityPoint_value(ctx context.Context, field grap
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_ActivityPoint_value(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_ActivityPoint_errors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "ActivityPoint",
 		Field:      field,
@@ -1490,8 +1499,8 @@ func (ec *executionContext) fieldContext_ActivityPoint_value(_ context.Context, 
 	return fc, nil
 }
 
-func (ec *executionContext) _ActivityPoint_level(ctx context.Context, field graphql.CollectedField, obj *model.ActivityPoint) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_ActivityPoint_level(ctx, field)
+func (ec *executionContext) _ActivityPoint_info(ctx context.Context, field graphql.CollectedField, obj *model.ActivityPoint) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ActivityPoint_info(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -1504,7 +1513,7 @@ func (ec *executionContext) _ActivityPoint_level(ctx context.Context, field grap
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.Level, nil
+		return obj.Info, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1516,19 +1525,63 @@ func (ec *executionContext) _ActivityPoint_level(ctx context.Context, field grap
 		}
 		return graphql.Null
 	}
-	res := resTmp.(model.LogLevel)
+	res := resTmp.(int)
 	fc.Result = res
-	return ec.marshalNLogLevel2githubᚗcomᚋmaddsuaᚋeventdbᚑnextᚋgqlᚋresolversᚋmodelᚐLogLevel(ctx, field.Selections, res)
+	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_ActivityPoint_level(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_ActivityPoint_info(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "ActivityPoint",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type LogLevel does not have child fields")
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ActivityPoint_date(ctx context.Context, field graphql.CollectedField, obj *model.ActivityPoint) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ActivityPoint_date(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Date, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(time.Time)
+	fc.Result = res
+	return ec.marshalNDate2timeᚐTime(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ActivityPoint_date(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ActivityPoint",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Date does not have child fields")
 		},
 	}
 	return fc, nil
@@ -2327,7 +2380,7 @@ func (ec *executionContext) _Mutation_deleteEvents(ctx context.Context, field gr
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().DeleteEvents(rctx, fc.Args["stream_id"].(*uuid.UUID), fc.Args["after"].(*time.Time), fc.Args["before"].(*time.Time))
+		return ec.resolvers.Mutation().DeleteEvents(rctx, fc.Args["stream_id"].(*uuid.UUID), fc.Args["from"].(*time.Time), fc.Args["to"].(*time.Time))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -2915,10 +2968,12 @@ func (ec *executionContext) fieldContext_Query_activity(ctx context.Context, fie
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "value":
-				return ec.fieldContext_ActivityPoint_value(ctx, field)
-			case "level":
-				return ec.fieldContext_ActivityPoint_level(ctx, field)
+			case "errors":
+				return ec.fieldContext_ActivityPoint_errors(ctx, field)
+			case "info":
+				return ec.fieldContext_ActivityPoint_info(ctx, field)
+			case "date":
+				return ec.fieldContext_ActivityPoint_date(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ActivityPoint", field.Name)
 		},
@@ -5572,13 +5627,18 @@ func (ec *executionContext) _ActivityPoint(ctx context.Context, sel ast.Selectio
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("ActivityPoint")
-		case "value":
-			out.Values[i] = ec._ActivityPoint_value(ctx, field, obj)
+		case "errors":
+			out.Values[i] = ec._ActivityPoint_errors(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "level":
-			out.Values[i] = ec._ActivityPoint_level(ctx, field, obj)
+		case "info":
+			out.Values[i] = ec._ActivityPoint_info(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "date":
+			out.Values[i] = ec._ActivityPoint_date(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

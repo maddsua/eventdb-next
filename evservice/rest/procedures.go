@@ -124,13 +124,14 @@ func (this *Procedues) Push(writer http.ResponseWriter, req *http.Request) (any,
 				}
 			}
 
+			//	todo: check and normalize data
 			arg := sqliteops.AddEventParams{
 				ID:            uuid.NewString(),
 				StreamID:      streamID,
 				TransactionID: entry.TransactionID.NullString,
 				ClientIp:      entry.ClientIP.NullString,
 				Type:          null.StringFrom("LOG").NullString,
-				Level:         null.StringFrom(entry.Level).NullString,
+				Level:         null.StringFrom(strings.ToLower(entry.Level)).NullString,
 				Message:       null.StringFrom(entry.Message).NullString,
 				Fields:        fields.NullString,
 			}

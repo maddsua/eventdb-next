@@ -36,6 +36,7 @@ type UserAuthState {
 
 type DataStream {
     id: UUID!
+    push_key: String!
     name: String!
     created: Date!
     updated: Date!
@@ -82,6 +83,7 @@ type Mutation {
     createStream(name: String!): DataStream!
     deleteStream(id: UUID!): UUID!
     deleteEvents(stream: UUID, from: Date, to: Date): [UUID!]!
+    refreshStreamPushKey(stream: UUID!): DataStream!
 }
 
 type Subscription {

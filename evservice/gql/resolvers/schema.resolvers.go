@@ -15,6 +15,7 @@ import (
 	"github.com/maddsua/eventdb-next/gql/resolvers/model"
 	"github.com/maddsua/eventdb-next/gql/resolvers/scalars"
 	"github.com/maddsua/eventdb-next/utils"
+	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 
 // Events is the resolver for the events field.
@@ -85,8 +86,12 @@ func (r *mutationResolver) CreateStream(ctx context.Context, name string) (*mode
 func (r *mutationResolver) DeleteStream(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
 	//	todo: add auth stuff here
 
-	if _, err := r.DB.RemoveStream(ctx, id.String()); err != nil {
+	if affected, err := r.DB.RemoveStream(ctx, id.String()); err != nil {
 		return uuid.UUID{}, err
+	} else if affected == 0 {
+		return uuid.UUID{}, &gqlerror.Error{
+			Message: "Stream doesn't exist",
+		}
 	}
 
 	return id, nil

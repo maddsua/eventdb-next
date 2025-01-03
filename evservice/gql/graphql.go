@@ -52,6 +52,7 @@ func NewHandler(db *sqliteops.Queries) http.Handler {
 	gqlHandler.SetErrorPresenter(func(ctx context.Context, err error) *gqlerror.Error {
 
 		gqlErr := graphql.DefaultErrorPresenter(ctx, err)
+		//	todo: fix
 		if len(gqlErr.Extensions) == 0 {
 			req := request.From(ctx)
 			slog.Error("GQL: Resolver error",

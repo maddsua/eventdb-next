@@ -9,6 +9,15 @@ insert into streams (
 	sqlc.arg(name)
 );
 
+-- name: GetStreamByID :one
+select * from streams
+where id = sqlc.arg(id);
+
+-- name: GetStreams :many
+select * from streams
+order by created_at asc
+limit sqlc.arg(limit) offset sqlc.arg(offset);
+
 -- name: SetStreamPushKey :execrows
 update streams
 	set push_key = sqlc.narg(push_key)
@@ -23,7 +32,7 @@ where id = sqlc.arg(id);
 delete from streams
 where id = sqlc.arg(id);
 
--- name: AddEvent :execrows
+-- name: AddEvent :exec
 insert into events (
 	id,
 	stream_id,

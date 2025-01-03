@@ -10,7 +10,7 @@ import (
 	"database/sql"
 )
 
-const addEvent = `-- name: AddEvent :execrows
+const addEvent = `-- name: AddEvent :exec
 insert into events (
 	id,
 	stream_id,
@@ -43,8 +43,8 @@ type AddEventParams struct {
 	Fields        sql.NullString
 }
 
-func (q *Queries) AddEvent(ctx context.Context, arg AddEventParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, addEvent,
+func (q *Queries) AddEvent(ctx context.Context, arg AddEventParams) error {
+	_, err := q.db.ExecContext(ctx, addEvent,
 		arg.ID,
 		arg.StreamID,
 		arg.ClientIp,
@@ -54,10 +54,7 @@ func (q *Queries) AddEvent(ctx context.Context, arg AddEventParams) (int64, erro
 		arg.Message,
 		arg.Fields,
 	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
+	return err
 }
 
 const createStream = `-- name: CreateStream :execrows
@@ -112,6 +109,64 @@ func (q *Queries) DeleteEvents(ctx context.Context, arg DeleteEventsParams) (int
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const getStreamByID = `-- name: GetStreamByID :one
+select id, push_key, name, created_at, updated_at from streams
+where id = ?1
+`
+
+func (q *Queries) GetStreamByID(ctx context.Context, id string) (Stream, error) {
+	row := q.db.QueryRowContext(ctx, getStreamByID, id)
+	var i Stream
+	err := row.Scan(
+		&i.ID,
+		&i.PushKey,
+		&i.Name,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getStreams = `-- name: GetStreams :many
+select id, push_key, name, created_at, updated_at from streams
+order by created_at asc
+limit ?2 offset ?1
+`
+
+type GetStreamsParams struct {
+	Offset int64
+	Limit  int64
+}
+
+func (q *Queries) GetStreams(ctx context.Context, arg GetStreamsParams) ([]Stream, error) {
+	rows, err := q.db.QueryContext(ctx, getStreams, arg.Offset, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Stream
+	for rows.Next() {
+		var i Stream
+		if err := rows.Scan(
+			&i.ID,
+			&i.PushKey,
+			&i.Name,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const removeStream = `-- name: RemoveStream :execrows

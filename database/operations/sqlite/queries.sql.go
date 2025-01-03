@@ -13,6 +13,7 @@ import (
 const addEvent = `-- name: AddEvent :exec
 insert into events (
 	id,
+	created_at,
 	stream_id,
 	client_ip,
 	transaction_id,
@@ -28,12 +29,14 @@ insert into events (
 	?5,
 	?6,
 	?7,
-	?8
+	?8,
+	?9
 )
 `
 
 type AddEventParams struct {
 	ID            string
+	CreatedAt     sql.NullInt64
 	StreamID      string
 	ClientIp      sql.NullString
 	TransactionID sql.NullString
@@ -46,6 +49,7 @@ type AddEventParams struct {
 func (q *Queries) AddEvent(ctx context.Context, arg AddEventParams) error {
 	_, err := q.db.ExecContext(ctx, addEvent,
 		arg.ID,
+		arg.CreatedAt,
 		arg.StreamID,
 		arg.ClientIp,
 		arg.TransactionID,

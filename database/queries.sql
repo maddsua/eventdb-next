@@ -35,6 +35,7 @@ where id = sqlc.arg(id);
 -- name: AddEvent :exec
 insert into events (
 	id,
+	created_at,
 	stream_id,
 	client_ip,
 	transaction_id,
@@ -44,6 +45,7 @@ insert into events (
 	fields
 ) values (
 	sqlc.arg(id),
+	sqlc.narg(created_at),
 	sqlc.arg(stream_id),
 	sqlc.narg(client_ip),
 	sqlc.narg(transaction_id),

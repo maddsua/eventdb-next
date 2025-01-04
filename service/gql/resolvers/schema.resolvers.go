@@ -358,7 +358,6 @@ func (r *queryResolver) Activity(ctx context.Context, from *time.Time, to *time.
 func (r *streamEventResolver) Stream(ctx context.Context, obj *model.StreamEvent) (*model.DataStream, error) {
 	//	todo: add auth stuff here
 
-	//	todo: fix nil output
 	entry, err := r.DB.GetStreamByID(ctx, obj.Stream.ID.String())
 	if err != nil {
 		return nil, err

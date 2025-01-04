@@ -18,7 +18,7 @@ func TransformStreamEvent(val sqliteops.Event) (StreamEvent, error) {
 		return StreamEvent{}, err
 	}
 
-	streamID, err := uuid.Parse(val.ID)
+	streamID, err := uuid.Parse(val.StreamID)
 	if err != nil {
 		return StreamEvent{}, err
 	}

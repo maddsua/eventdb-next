@@ -2,6 +2,7 @@ package rest
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -124,10 +125,17 @@ func (this *Procedues) Push(writer http.ResponseWriter, req *http.Request) (any,
 				}
 			}
 
+			var createdAt int64
+			if entry.Timestamp.Valid {
+				createdAt = entry.Timestamp.Int64
+			} else {
+				createdAt = time.Now().Unix()
+			}
+
 			//	todo: check and normalize data
 			arg := sqliteops.AddEventParams{
 				ID:            uuid.NewString(),
-				CreatedAt:     entry.Timestamp.NullInt64,
+				CreatedAt:     sql.NullInt64{Int64: createdAt, Valid: true},
 				StreamID:      streamID,
 				TransactionID: entry.TransactionID.NullString,
 				ClientIp:      entry.ClientIP.NullString,
